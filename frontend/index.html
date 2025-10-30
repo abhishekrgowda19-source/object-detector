@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>YOLOv8 Object Detection</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: linear-gradient(135deg, #1e1e2f, #2d155e);
+      color: white;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      min-height: 100vh;
+      margin: 0;
+      padding: 30px 10px;
+    }
+    h1 {
+      color: #00e5ff;
+      margin-bottom: 20px;
+      font-size: 2.2rem;
+      text-shadow: 0 0 10px #00e5ff;
+      animation: fadeInDown 1s ease;
+    }
+    @keyframes fadeInDown {
+      from { opacity: 0; transform: translateY(-20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    #mainContainer {
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      gap: 25px;
+      flex-wrap: wrap;
+      width: 100%;
+      max-width: 1000px;
+    }
+    #canvasContainer {
+      position: relative;
+      width: 550px;
+      max-width: 100%;
+      background: rgba(0, 0, 0, 0.4);
+      border: 2px solid #00e5ff;
+      border-radius: 15px;
+      box-shadow: 0 0 20px rgba(0, 229, 255, 0.3);
+      padding: 10px;
+      transition: transform 0.3s;
+    }
+    #canvasContainer:hover { transform: scale(1.02); }
+    canvas { width: 100%; border-radius: 10px; }
+    #objectList {
+      width: 260px;
+      background: rgba(0, 0, 0, 0.6);
+      border: 2px solid #00e5ff;
+      border-radius: 15px;
+      padding: 15px;
+      box-shadow: 0 0 15px rgba(0, 229, 255, 0.2);
+      animation: fadeIn 1s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    #objectList h2 {
+      text-align: center;
+      color: #00e5ff;
+      margin-top: 0;
+      font-size: 1.3rem;
+      border-bottom: 2px solid #00e5ff;
+      padding-bottom: 8px;
+    }
+    #objectList ul {
+      list-style: none;
+      padding: 0;
+      margin: 10px 0 0 0;
+      max-height: 350px;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: #00e5ff #1e1e2f;
+    }
+    #objectList li {
+      margin: 8px 0;
+      background: #b71c1c;
+      color: white;
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 14px;
+      transition: all 0.3s;
+    }
+    #objectList li:hover {
+      background: #d32f2f;
+      transform: scale(1.03);
+    }
+    input[type="file"] {
+      margin-top: 25px;
+      padding: 10px 15px;
+      background: linear-gradient(90deg, #00bcd4, #2196f3);
+      border: none;
+      border-radius: 8px;
+      color: white;
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 15px;
+      letter-spacing: 0.5px;
+      transition: 0.3s;
+    }
+    input[type="file"]:hover {
+      background: linear-gradient(90deg, #00e5ff, #2962ff);
+      transform: scale(1.05);
+      box-shadow: 0 0 10px rgba(0, 229, 255, 0.6);
+    }
+    #result {
+      margin-top: 15px;
+      text-align: center;
+      font-size: 1.1rem;
+      color: #aeea00;
+      text-shadow: 0 0 8px #aeea00;
+    }
+    footer {
+      margin-top: 40px;
+      color: #ccc;
+      font-size: 0.9rem;
+      text-align: center;
+      opacity: 0.8;
+    }
+  </style>
+</head>
+<body>
+  <h1>⚡ SMART Object Detection  ⚡</h1>
+  <div id="mainContainer">
+    <div id="canvasContainer">
+      <canvas id="canvas"></canvas>
+    </div>
+    <div id="objectList">
+      <h2>Detected Objects</h2>
+      <ul id="objectNames">
+        <li>Upload an image to detect objects...</li>
+      </ul>
+    </div>
+  </div>
+  <input type="file" id="imageInput" accept="image/*" />
+  <div id="result"></div>
+  <footer>Developed by <strong>ABHISHEK</strong> | Powered bY  Gemsyn</footer>
+
+  <script>
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    const imageInput = document.getElementById("imageInput");
+    const resultDiv = document.getElementById("result");
+    const objectNamesList = document.getElementById("objectNames");
+
+    imageInput.addEventListener("change", async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const img = new Image();
+      img.src = URL.createObjectURL(file);
+      img.onload = async () => {
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0, img.width, img.height);
+
+        const formData = new FormData();
+        formData.append("image", file);
+        resultDiv.innerHTML = "🔍 Detecting objects...";
+        objectNamesList.innerHTML = "";
+
+        try {
+          const response = await fetch("http://127.0.0.1:5000/detect", {
+            method: "POST",
+            body: formData,
+          });
+          const data = await response.json();
+          resultDiv.innerHTML = "";
+
+          if (data.detections && data.detections.length > 0) {
+            data.detections.forEach((det, index) => {
+              const [x1, y1, x2, y2] = det.bbox;
+              const label = `${det.label} (${det.confidence}%)`;
+
+              ctx.strokeStyle = "#00FF00";
+              ctx.lineWidth = 3;
+              ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+              ctx.fillStyle = "rgba(0,255,0,0.7)";
+              ctx.font = "16px Poppins";
+              ctx.fillText(label, x1 + 5, y1 + 20);
+
+              const li = document.createElement("li");
+              li.textContent = `${index + 1}. ${label}`;
+              objectNamesList.appendChild(li);
+            });
+            resultDiv.innerHTML = `<strong>${data.detections.length}</strong> objects detected ✅`;
+          } else {
+            resultDiv.innerHTML = "No objects detected ❌";
+            objectNamesList.innerHTML = "<li>No detections found.</li>";
+          }
+        } catch (err) {
+          resultDiv.innerHTML = "⚠️ Error connecting to backend.";
+          console.error(err);
+        }
+      };
+    });
+  </script>
+</body>
+</html>
